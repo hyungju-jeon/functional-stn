@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/../librealsense/wrappers/python/examples/.idea/examples.iml" filepath="$PROJECT_DIR$/../librealsense/wrappers/python/examples/.idea/examples.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/funtional-stn.iml" filepath="$PROJECT_DIR$/.idea/funtional-stn.iml" />
     </modules>
   </component>
