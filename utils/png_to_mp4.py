@@ -2,6 +2,7 @@ import cv2
 import os
 import glob
 import pathlib
+import multiRS
 
 folder_list = ['/Users/hyungju/Desktop/hyungju/Result/functional-stn/210720/test1_original',
                '/Users/hyungju/Desktop/hyungju/Result/functional-stn/210720/test1_fixed_exposure',

@@ -1,7 +1,7 @@
 # import yaml
 
 # Specific for Intel RealSense camera
-from utils.RS_camera import *
+from multiRS import *
 import pyrealsense2 as rs
 
 
