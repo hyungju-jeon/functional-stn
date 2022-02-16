@@ -2,19 +2,9 @@
 
 # Specific for Intel RealSense camera
 from multiRS import *
+from rs_pipeline import *
 import pyrealsense2 as rs
-
-
-def read_frame(pipeline: rs.pipeline):
-    device = pipeline.get_active_profile().get_device()
-    playback = device.as_playback()
-    # playback.set_real_time(False)
-    playback.resume()
-    frame = pipeline.wait_for_frames()
-    playback.pause()
-
-    framenumber = frame[0].get_frame_number()
-    return frame, framenumber
+import os
 
 
 def align_frames(pipeline: rs.pipeline, frame: rs.frame, framenumber: int, start_time: int):
@@ -22,7 +12,7 @@ def align_frames(pipeline: rs.pipeline, frame: rs.frame, framenumber: int, start
         if start_time <= frame.get_timestamp():
             return frame, framenumber
         frame, framenumber = read_frame(pipeline)
-        # print(f'Frame after seek : {framenumber}')
+        print(f'Frame after seek : {framenumber}')
 
 
 def process_multi_bag(bag_list: list):
@@ -30,8 +20,12 @@ def process_multi_bag(bag_list: list):
     for i in range(len(bag_list)):
         pipeline = rs.pipeline()
         config = rs.config()
+        frame_width = 960
+        frame_height = 540
+        frame_format = 'BRG'
+        frame_rate = 60
         rs.config.enable_device_from_file(config, bag_list[i], repeat_playback=False)
-        config.enable_stream(rs.stream.color, rs.format.bgr8, 30)
+        config.enable_stream(rs.stream.color, frame_width, frame_height, rs.format.bgr8, frame_rate)
         pipeline.start(config)
         pipelines.append(pipeline)
 
@@ -83,6 +77,6 @@ def process_multi_bag(bag_list: list):
 
 if __name__ == "__main__":
     filenames = ['camera_034422070939.bag', 'camera_104422070056.bag', 'camera_104422070104.bag']
-    bag_list = [os.path.join('/Users/hyungju/Desktop/hyungju/Result/functional-stn/210525', x) for x in filenames]
+    bag_list = [os.path.join('/Volumes/shared_3/Project/functional-stn/Recording/220104-wt22', x) for x in filenames]
 
     process_multi_bag(bag_list)

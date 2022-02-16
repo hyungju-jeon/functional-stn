@@ -8,9 +8,11 @@ import os
 import cv2
 import time
 import threading
+import numpy as np
 import pyrealsense2 as rs
 from open3d import *
 from queue import Queue
+import signal
 
 # Default camera config
 camera_config = {
@@ -18,9 +20,12 @@ camera_config = {
     'enable_color': True,
     'color_format': 'BGR',  # Only 2 options: BGR (good for OpenCV) or RGB (good for Open3D) format
     'hw_sync_mode': 'NONE',  # Only 3 modes: NONE, MASTER, SLAVE
-    'width': 640,  # Check with RealSense viewer to ensure your computer and USB port can handle the required width, height and fps
-    'height': 480,  # Check with RealSense viewer to ensure your computer and USB port can handle the required width, height and fps
-    'fps': 30,  # Check with RealSense viewer to ensure your computer and USB port can handle the required width, height and fps
+    'width': 640,
+    # Check with RealSense viewer to ensure your computer and USB port can handle the required width, height and fps
+    'height': 480,
+    # Check with RealSense viewer to ensure your computer and USB port can handle the required width, height and fps
+    'fps': 30,
+    # Check with RealSense viewer to ensure your computer and USB port can handle the required width, height and fps
     'print_debug': False,  # Set to True to print out camera parameters
     'save_camera_para': True,  # Set to True to save all the camera intrinsics and extrinsics between color and depth
     # camera during class initialization
@@ -30,8 +35,10 @@ camera_config = {
     'save_path': '/Users/hyungju/Desktop/hyungju/Result/functional-stn',
 }
 
+
 class CameraRS:
     def __init__(self, device, config):
+        self.run = True
         self.cc = config
         self.device = device
         self.device_name = self.device.get_info(rs.camera_info.name)
@@ -44,7 +51,10 @@ class CameraRS:
             color_format = rs.format.bgr8  # By default its BGR suitable for display in OpenCV
         elif config['color_format'] == 'RGB':
             color_format = rs.format.rgb8  # But when plotting colored pointcloud using Open3D use RGB
-        if config['enable_depth']: rs_config.enable_stream(rs.stream.depth, config['width'], config['height'], rs.format.z16, config['fps'])
+        elif config['color_format'] == 'YUY':
+            color_format = rs.format.yuyv  # But when plotting colored pointcloud using Open3D use RGB
+        if config['enable_depth']: rs_config.enable_stream(rs.stream.depth, config['width'], config['height'],
+                                                           rs.format.z16, config['fps'])
         if config['enable_color']:
             rs_config.enable_stream(rs.stream.color, config['width'], config['height'], color_format, config['fps'])
         # Must set the sync mode before starting the pipeline
@@ -56,8 +66,10 @@ class CameraRS:
             print('recording')
             rs_config.enable_record_to_file(os.path.join(config['save_path'], f'camera_{self.serial_number}.bag'))
         self.rs_config = rs_config
+        self.pipeline = None
 
-    def start_pipeline(self, config):
+
+    def start_pipeline(self, config=None):
         """ Start RealSense pipeline
 
         Parameters
@@ -65,16 +77,20 @@ class CameraRS:
         config : dict
 
         """
-        rs_config = self.rs_config
+        if config is None:
+            config = self.cc
+
         ##########################
         ### Start the pipeline ###
         ##########################
         self.pipeline = rs.pipeline()
-        self.profile = self.pipeline.start(rs_config)  # Start streaming
-        self.color_sensor = self.profile.get_device().query_sensors()[1]
-        self.color_sensor.set_option(rs.option.auto_exposure_priority, False)
-        self.color_sensor.set_option(rs.option.enable_auto_exposure, True)
-        self.color_sensor.set_option(rs.option.white_balance, 4600)
+        profile = self.pipeline.start(self.rs_config)  # Start streaming
+        color_sensor = profile.get_device().query_sensors()[1]
+        color_sensor.set_option(rs.option.auto_exposure_priority, False)
+        color_sensor.set_option(rs.option.enable_auto_exposure, False)
+        color_sensor.set_option(rs.option.exposure, 100)
+        color_sensor.set_option(rs.option.white_balance, 4600)
+        color_sensor.set_option(rs.option.frames_queue_size, 32)
 
         #####################################################################################
         ### Get first set of coherent frames to display camera intrinsics and extrinsics  ###
@@ -89,18 +105,11 @@ class CameraRS:
         if config['print_debug']:
             if color_frame: print('[CameraRS] Color camera intrinsics', color_camera_intrinsics)
 
+
+
         # Create camera matrix and distortion coefficients for camera calibration
         # Note: acutally infra_camera_intrinsics same as depth_camera_intrinsics
         # But duplicate twice for below just in case depth or infra is disabled
-        if color_frame:
-            # Comment off this line as I am not sure if other code that uses this class
-            # assume camera_intrinsics is always equal to depth/infra intrinsics
-            self.camera_intrinsics = color_camera_intrinsics
-            t = color_camera_intrinsics
-            self.dist_coeffs = np.array(t.coeffs)  # Note: always zero for D415 in the factory calibration
-            self.camera_matrix_color = np.array([[t.fx, 0, t.ppx],
-                                                 [0, t.fy, t.ppy],
-                                                 [0, 0, 1]])
 
 
 #
@@ -147,16 +156,16 @@ class CameraRS:
 #
 #         return depth_colormap, color_img, align_img
 #
-#     def get_color_img(self):
-#         # Wait for coherent frames
-#         frames = self.pipeline.wait_for_frames()
-#         if self.cc['enable_color']:
-#             color_frame = frames.get_color_frame()
-#             # Convert camera frame to np array image
-#             if color_frame:
-#                 return np.asanyarray(color_frame.get_data())
-#
-#         return np.array([])
+    def get_color_img(self):
+        # Wait for coherent frames
+        frames = self.pipeline.wait_for_frames()
+        if self.cc['enable_color']:
+            color_frame = frames.get_color_frame()
+            # Convert camera frame to np array image
+            if color_frame:
+                return np.asanyarray(color_frame.get_data())
+
+        return np.array([])
 #
 #     def get_depth_color_img(self):
 #         # Wait for coherent frames
