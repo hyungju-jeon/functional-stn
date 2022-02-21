@@ -1,5 +1,5 @@
-""" Realsense camera class
-<Long description>
+""" Realsense pipeline functions
+Auxiliary functions to process realsense pipeline
 Author: <Name> <email>
 Created: <date>
 """
