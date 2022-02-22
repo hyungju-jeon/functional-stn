@@ -8,7 +8,7 @@ import pyrealsense2 as rs
 import os
 
 
-def read_frame(pipeline: rs.pipeline):
+def read_frame(pipeline):
     device = pipeline.get_active_profile().get_device()
     playback = device.as_playback()
     playback.set_real_time(False)
