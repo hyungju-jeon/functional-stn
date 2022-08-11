@@ -12,7 +12,7 @@ class Stopwatch(Frame):
         self.root = master
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        self.root.geometry("%dx%d+%d+%d" % (500, 120, screen_width / 2, screen_height / 2))
+        self.root.geometry("%dx%d+%d+%d" % (660, 500, screen_width / 2, screen_height / 2))
         # Frame initialization
         self.imageFrame = None
         # Button initialization
@@ -20,6 +20,7 @@ class Stopwatch(Frame):
         self.startButton = None
         # Text initialization
         self.show = None
+        self.imageGrid = [[]]*4
 
         # place widgets
         self.widgets()
@@ -35,16 +36,28 @@ class Stopwatch(Frame):
         timeFrame = LabelFrame(self.root, text='Recording in Progress')
         timeFrame.grid(row=0, sticky='NSEW')
         timeFrame.grid_columnconfigure(0, weight=1)
-        timeFrame.grid_columnconfigure(2, weight=1)
-        timeFrame.grid_columnconfigure(4, weight=1)
+        timeFrame.grid_columnconfigure(1, weight=1)
+        self.timeFrame = timeFrame
+
+        # draw Timer
+        self.imageGrid[0] = Label(timeFrame)
+        self.imageGrid[0].grid(row=0, column=0, sticky='W')
+        self.imageGrid[1] = Label(timeFrame)
+        self.imageGrid[1].grid(row=0, column=1, sticky='E')
+        self.imageGrid[2] = Label(timeFrame)
+        self.imageGrid[2].grid(row=1, column=0, sticky='W')
+        self.imageGrid[3] = Label(timeFrame)
+        self.imageGrid[3].grid(row=1, column=1, sticky='E')
+
         # draw Timer
         self.show = Label(timeFrame, text='00:00:00', font=('Helvetica', 30))
-        self.show.grid(row=0, column=0, columnspan=5, sticky='EW')
+        self.show.grid(row=2, column=0, columnspan=2, sticky='EW')
         # setup buttons
         self.startButton = Button(timeFrame, text='Start Recording', height=2, width=20, command=self.start)
-        self.startButton.grid(row=1, column=1)
+        self.startButton.grid(row=3, column=0)
         self.quitButton = Button(timeFrame, text='End Recording', height=2, width=20, command=self.quit)
-        self.quitButton.grid(row=1, column=3)
+        self.quitButton.grid(row=3, column=1)
+
 
     def update_time(self):
         if self.running:  # Clock is running
@@ -70,11 +83,5 @@ class Stopwatch(Frame):
 
 if __name__ == "__main__":
     root = tkinter.Tk()
-
-    img = cv2.imread('/Volumes/shared_3/Project/functional-stn/Recording/220104-wt22/camera_034422070939/_Color_1641306006583.52099609375000.png')
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img_pil = Image.fromarray(img_rgb)
-    imgtk = ImageTk.PhotoImage(image=img_pil)
-
     up = Stopwatch(root)
     root.mainloop()

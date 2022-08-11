@@ -53,10 +53,8 @@ class CameraRS:
             color_format = rs.format.rgb8  # But when plotting colored pointcloud using Open3D use RGB
         elif config['color_format'] == 'YUY':
             color_format = rs.format.yuyv  # But when plotting colored pointcloud using Open3D use RGB
-        if config['enable_depth']: rs_config.enable_stream(rs.stream.depth, config['width'], config['height'],
-                                                           rs.format.z16, config['fps'])
-        if config['enable_color']:
-            rs_config.enable_stream(rs.stream.color, config['width'], config['height'], color_format, config['fps'])
+        if config['enable_depth']: rs_config.enable_stream(rs.stream.depth, config['width'], config['height'], rs.format.z16, config['fps'])
+        if config['enable_color']: rs_config.enable_stream(rs.stream.color, config['width'], config['height'], color_format, config['fps'])
         # Must set the sync mode before starting the pipeline
         if config['hw_sync_mode'] == 'MASTER':
             self.device.first_depth_sensor().set_option(rs.option.inter_cam_sync_mode, 1)  # 1: Master

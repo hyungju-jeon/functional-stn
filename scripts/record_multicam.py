@@ -14,12 +14,24 @@ def start_recording():
         up.running = True
         for camera in cameras:
             camera.start_pipeline()
-    if cameras[0].cc['enable_color']:
-        frame = cameras[0].get_color_img()  # Get infra image from camera
-        if frame.size >= 1:
-            cv2.namedWindow('Camera 0')
-            cv2.imshow("Camera 0", frame)
+        for idx in range(4):
+            draw(idx)
+    # if cameras[0].cc['enable_color']:
+    #     frame = cameras[0].get_color_img()  # Get infra image from camera
+    #     if frame.size >= 1:
+    #         cv2.namedWindow('Camera 0')
+    #         cv2.imshow("Camera 0", frame)
     up.root.after(round(1000 / camera_config['fps']), start_recording)
+
+def draw(camera_id):
+    img = cameras[camera_id].get_color_img()
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img_pil = Image.fromarray(img_rgb)
+    imgtk = ImageTk.PhotoImage(image=img_pil)
+
+    up.root.imageGrid[camera_id].imgtk = imgtk
+    up.root.imageGrid[camera_id].configure(image=imgtk)
+    up.root.imageGrid[camera_id].after(10, draw(camera_id))
 
 
 if __name__ == "__main__":
@@ -48,3 +60,4 @@ if __name__ == "__main__":
     cv2.destroyAllWindows()
     for camera in cameras:
         camera.pipeline.stop()
+        camera.pipe

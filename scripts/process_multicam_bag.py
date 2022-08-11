@@ -5,6 +5,8 @@ from rs_pipeline import *
 import pyrealsense2 as rs
 import os
 import json
+import cv2
+import multiprocessing
 
 
 def read_metadata(fname: str):
@@ -25,7 +27,9 @@ def read_metadata(fname: str):
     metadata = dict()
     for line in lines:
         metadata[line.split(':')[0]] = line.split(':')[1][1:-1]
-    metadata['Filename'] = os.path.basename(fname).replace('_metadata', '').replace('txt', 'png')
+    newname = os.path.basename(fname).replace('_metadata', '').replace('txt', 'png')
+    pngname = os.path.join(os.path.dirname(fname), newname)
+    metadata['Filename'] = pngname
     f.close()
 
     return metadata
@@ -84,59 +88,52 @@ def process_multi_bag(bag_list: list, info_list: list, frame_lists: list = None)
         # Run align using bag
         print('No frame information detected...')
         print('Aligning pipelines on-the-fly')
-        frames, pipelines = align_pipelines_bag(bag_list, frame_rate)
-        # align_pipelines_bag()
+        # frames, pipelines = align_from_bag(bag_list, frame_rate)
     else:
         # Run align using frame_list
         print('Aligning pipelines using frame list')
-        # align_pipelines_frame(frame_lists)
+        valid_frames, extended_frames = align_from_frame(frame_lists, frame_rate)
 
-    # Examine all timeframes an remove dangling frame (non matching)
-    # Save in mp4 using ffmpeg
-    # Save recording_info.txt
-    if sum(np.invert(process_frame)):
-        start_time = min(np.array([x.get_timestamp() for x in frames])[np.invert(process_frame)])
-        for i in range(len(pipelines)):
-            if process_frame[i]:
-                frame, framenumber = align_pipelines(pipelines[i], frames[i], framenumbers[i], start_time)
-                framenumbers[i] = framenumber
-                frames[i] = frame
+    # for cam in range(len(valid_frames)):
+    #     save_folder = os.path.join(os.path.dirname(bag_list[cam]), f'Camera{cam+1}')
+    #     os.makedirs(save_folder, exist_ok=True)
+    #     save_name = os.path.join(save_folder, '0_cut.mp4')
+    #     out = cv2.VideoWriter(save_name, cv2.VideoWriter_fourcc(*'avc1'), frame_rate, (frame_width, frame_height))
+    #     count = 0
+    #     for frame in valid_frames[cam]:
+    #         img = cv2.imread(frame[2])
+    #         out.write(img)
+    #         count += 1
+    #         if count%100 == 0:
+    #             print(f'Writing {count} / {len(valid_frames[cam])}')
+    #         if count%10000 == 0:
+    #             out.release()
+    #             save_name = os.path.join(save_folder, f'{count}_cut.mp4')
+    #             out = cv2.VideoWriter(save_name, cv2.VideoWriter_fourcc(*'avc1'), frame_rate, (frame_width, frame_height))
+    #     out.release()
 
-    prev_time = [0] * len(pipelines)
-    while (True):
-        for i in range(len(pipelines)):
-            frame, framenumber = read_frame(pipelines[i])
-            framenumbers[i] = framenumber
-            frames[i] = frame
-        for i in range(0, len(pipelines)):
-            time_diff = frames[i].get_timestamp() - prev_time[i]
-            ref_diff = frames[i].get_timestamp() - frames[0].get_timestamp()
-            print(f'Camera {i} : time difference from previous frame is {time_diff:3.3f}, diff from Camera 0 is '
-                  f'{ref_diff:3.3f}')
-            prev_time[i] = frames[i].get_timestamp()
-
-def find_matching_frame(frame_list: list, current_time: int, current_loc: int = 0):
-    """
-    Function description
-
-    Parameters
-    ----------
-    parameter: parameter class (required/optional)
-        Parameter description
-
-    Returns
-		-------
-		return: return class
-			Return description
-		"""
-    cropped_list = frame_list[current_loc:]
-    time_diff = [abs(x[1]-current_time) for x in cropped_list]
+    for cam in range(len(extended_frames)):
+        save_folder = os.path.join(os.path.dirname(bag_list[cam]), f'Camera{cam+1}')
+        os.makedirs(save_folder, exist_ok=True)
+        save_name = os.path.join(save_folder, '0.mp4')
+        out = cv2.VideoWriter(save_name, cv2.VideoWriter_fourcc(*'avc1'), frame_rate, (frame_width, frame_height))
+        count = 0
+        for frame in extended_frames[cam]:
+            img = cv2.imread(frame[2])
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            out.write(img)
+            count += 1
+            if count%100 == 0:
+                print(f'Writing {count} / {len(extended_frames[cam])}')
+            if count%10000 == 0:
+                out.release()
+                save_name = os.path.join(save_folder, f'{count}.mp4')
+                out = cv2.VideoWriter(save_name, cv2.VideoWriter_fourcc(*'avc1'), frame_rate, (frame_width, frame_height))
+        out.release()
 
 
-    return current_loc + matching_loc
 
-
-def align_pipelines_bag(bag_list, frame_rate):
+def align_from_bag(bag_list, frame_rate):
     # Initialize pipelines
     pipelines = []
     for i in range(len(bag_list)):
@@ -170,7 +167,7 @@ def align_pipelines_bag(bag_list, frame_rate):
     return frames, pipelines
 
 
-def align_pipelines_frame(frame_list: list, fps: int):
+def align_from_frame(frame_list: list, fps: int):
     """
     Sync pipelines using frame time stamp information
 
@@ -186,6 +183,8 @@ def align_pipelines_frame(frame_list: list, fps: int):
         lists of valid (framenumber, timestamp) tuple list
     """
     valid_frames = [[] for i in range(len(frame_list))]
+    extended_frames = [[] for i in range(len(frame_list))]
+    time_step = (1000 / fps)
     start_time = 0
     current_loc = [0] * len(frame_list)
     for i in range(len(frame_list)):
@@ -196,48 +195,40 @@ def align_pipelines_frame(frame_list: list, fps: int):
         time_diff = [abs(x[1] - start_time) < (1000 / fps) for x in frame_list[i]]
         current_loc[i] = time_diff.index(True)
     current_time = start_time
-    # while True:
-    count = 0
-    while count < 100:
-        is_matched = True
-        for i in range(len(frame_list)):
-            cropped_list = frame_list[i][current_loc[i]:current_loc[i]+10]
-            time_diff = [abs(x[1] - current_time) < (1000 / fps) / 2 * 1.5 for x in cropped_list]
-            if True in time_diff:
-                current_loc[i] = time_diff.index(True) + current_loc[i]
-                is_matched = is_matched * True
-            else:
-                is_matched = False
-        if is_matched:
-            for i in range(len(frame_list)):
-                valid_frames[i].append(frame_list[i][current_loc[i]])
-            print(f'Current time at {current_time} with frame positions {current_loc}')
-        current_time = frame_list[0][current_loc[0]+1][1]
-        count += 1
 
-
-
-    for i in range(len(frame_list)):
-        if start_time < frame_list[i][0][1]:
-            start_time = frame_list[i][0][1]
-    print(f'Latest starting timestamp after alignment is {start_time}')
     while True:
+        is_matched = [True] * len(frame_list)
         for i in range(len(frame_list)):
-            frame_vector = frame_list[i]
-            loc = framelocs[i]
-            current_time = frame_vector[0][1]
-            while abs(current_time - start_time) >= 1000 / fps / 2 * 1.1:
-                frame_vector.pop(loc)
-                current_time = frame_vector[0][1]
-        break
+            crop_end = min(len(frame_list[i]), current_loc[i]+20)
+            cropped_list = frame_list[i][current_loc[i]:crop_end]
+            time_diff = [abs(x[1] - current_time) for x in cropped_list]
+            min_val, min_idx = min((val, idx) for (idx, val) in enumerate(time_diff))
+            current_loc[i] = min_idx + current_loc[i]
+            is_matched[i] = min_val < time_step / 2 * 1.2
 
-    return valid_frames
+        # print(f'Current time difference is {[x[y][1]-current_time for x,y in zip(frame_list, current_loc)]}')
+        for i in range(len(frame_list)):
+            extended_frames[i].append(frame_list[i][current_loc[i]])
+            if all(is_matched):
+                valid_frames[i].append(frame_list[i][current_loc[i]])
+        # print(f'Current time at {current_time} with frame positions {current_loc}')
+        current_time += time_step
+        if any([len(x)-1 == y for x, y, in zip(frame_list, current_loc)]): break
+    return valid_frames, extended_frames
 
 
-# TODO: convert to mp4 using ffmpeg
+def pool_save_frames(params: list):
+    filename = params[0]
+    print(f'Processing {os.path.basename(filename)}')
+    # Save frame in png and save frame list
+    [filefolder, basename] = os.path.split(filename)
+    save_folder = os.path.join(filefolder, os.path.splitext(basename)[0])
+    os.makedirs(save_folder, exist_ok=True)
+    os.system(f"rs-convert -i {filename} -p {save_folder}/ -c")
+    (_, _, file_list) = next(os.walk(save_folder))
 
 
-def extract_frames_from_bag(filename: str, save_frame: bool = True):
+def extract_frames_from_bag(filename: str):
     """
     	Extract frames in png file from bag recording
 
@@ -274,9 +265,7 @@ def extract_frames_from_bag(filename: str, save_frame: bool = True):
     # Save frame in png and save frame list
     [filefolder, basename] = os.path.split(filename)
     save_folder = os.path.join(filefolder, os.path.splitext(basename)[0])
-    if save_frame:
-        os.makedirs(save_folder, exist_ok=True)
-        os.system(f"rs-convert -i {filename} -p {save_folder} -c")
+
     (_, _, file_list) = next(os.walk(save_folder))
     metafile_list = [os.path.join(save_folder, fn) for fn in file_list if '.txt' in fn]
     meta_list = [read_metadata(x) for x in metafile_list]
@@ -292,9 +281,19 @@ def extract_frames_from_bag(filename: str, save_frame: bool = True):
 
 
 if __name__ == "__main__":
-    bag_folder = os.path.join('/Volumes/shared_3/Project/functional-stn/Recording/220104-wt22')
-    (_, _, file_list) = next(os.walk(bag_folder))
-    bag_list = [os.path.join(bag_folder, fn) for fn in file_list if '.bag' in fn]
-    bag_infos, frame_lists = zip(*[extract_frames_from_bag(x, save_frame=False) for x in bag_list])
+    parent_folder = os.path.join('/Volumes/shared_3/Personal/junghwan/3d/DATPARIS_PV_ChR2_220513')
+    folder_list = [x[0] for x in os.walk(parent_folder)]
+    for bag_folder in folder_list:
+        (_, _, file_list) = next(os.walk(bag_folder))
+        bag_list = [os.path.join(bag_folder, fn) for fn in file_list if '.bag' in fn]
+        # if there is no .bag files, search for subdirectory
+        if not bag_list:
+            print(f'This folder does not contain .bag files')
+            continue
+        else:
+            param_set = [(x,) for x in bag_list]
+            with multiprocessing.Pool(4) as pool:
+                pool.map_async(pool_save_frames, param_set, chunksize=1, callback=None).wait()
 
-    # process_multi_bag(bag_list, frame_lists)
+            bag_infos, frame_lists = zip(*[extract_frames_from_bag(x) for x in bag_list])
+            process_multi_bag(bag_list, bag_infos, frame_lists)

@@ -3,7 +3,7 @@ import numpy as np
 import time
 
 if __name__ == "__main__":
-    filepath =  'D:\camera_104422070056.bag'
+    filepath =  '/Volumes/shared_3/Personal/junghwan/3d/DATPARIS_PV_ChR2_220513/session_0/DAT_PARIS_220513_0_camera_034422070939.bag'
 
     frame_width = 960
     frame_height = 540
